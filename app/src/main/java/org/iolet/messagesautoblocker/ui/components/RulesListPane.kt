@@ -12,7 +12,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -20,46 +19,48 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
-import androidx.compose.material3.adaptive.navigation.ThreePaneScaffoldNavigator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.runBlocking
 import org.iolet.messagesautoblocker.R
-import org.iolet.messagesautoblocker.RuleItem
+import org.iolet.messagesautoblocker.util.Rule
+import org.iolet.messagesautoblocker.util.RuleDao
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun RulesListPane(navigator: ThreePaneScaffoldNavigator<Int>, scope: CoroutineScope, ruleList : MutableList<RuleItem>) {
+fun RulesListPane(navHelper: NavigatorHelper, ruleDao: RuleDao) {
+    val ruleList = ruleDao.getAll().collectAsState(initial = emptyList())
     Scaffold(
-        topBar = { RulesListTopBar(navigator, scope) },
-        floatingActionButton = { RulesListFAB(navigator, scope, ruleList) }
+        topBar = { TopBar(navHelper) },
+        floatingActionButton = { NewRuleFAB(navHelper, ruleDao) }
     ) {
         LazyColumn(modifier = Modifier
             .padding(it)
             .fillMaxSize()
         ) {
-            itemsIndexed(ruleList) { index, item -> RulesListItem(navigator, scope, index, item) }
+            itemsIndexed(ruleList.value) { index, item -> RuleCard(navHelper, index, item) }
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-private fun RulesListItem(navigator: ThreePaneScaffoldNavigator<Int>, scope: CoroutineScope, index: Int, item: RuleItem) {
+private fun RuleCard(navHelper: NavigatorHelper, index: Int, item: Rule) {
     Column (modifier = Modifier
         .fillMaxWidth()
     ) {
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         ListItem(
-            leadingContent = { Text("${index+1}") },
-            headlineContent = { Text(item.text, style = MaterialTheme.typography.bodyLarge) },
+            leadingContent = { Text("${item.id+1}") },
+            headlineContent = { Text(item.rule, style = MaterialTheme.typography.bodyLarge) },
             colors = ListItemDefaults.colors(
                 containerColor = MaterialTheme.colorScheme.background,
                 headlineColor = MaterialTheme.colorScheme.onBackground,
                 leadingIconColor = MaterialTheme.colorScheme.onBackground
             ),
-            modifier = Modifier.clickable(onClick = { navigateRule(navigator, scope, index) })
+            modifier = Modifier.clickable(onClick = { navHelper.rule(index) })
         )
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
     }
@@ -67,32 +68,29 @@ private fun RulesListItem(navigator: ThreePaneScaffoldNavigator<Int>, scope: Cor
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-private fun RulesListTopBar(navigator: ThreePaneScaffoldNavigator<Int>, scope: CoroutineScope) {
-    CenterAlignedTopAppBar(
+private fun TopBar(navHelper: NavigatorHelper) {
+    return CenterAlignedTopAppBar(
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer,
             titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
         ),
         title = { Text(text = "Rules", style = MaterialTheme.typography.headlineSmall) },
-        actions = {
-            IconButton(onClick = { navigateSettings(navigator, scope) }) {
-                Icon(
-                    painter = painterResource(R.drawable.settings_24px),
-                    contentDescription = "Settings",
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-        }
+        actions = navHelper.settingsButton
     )
 }
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-private fun RulesListFAB(navigator: ThreePaneScaffoldNavigator<Int>, scope: CoroutineScope, ruleList : MutableList<RuleItem>) {
+private fun NewRuleFAB(navHelper: NavigatorHelper, ruleDao: RuleDao) {
     FloatingActionButton(
         onClick = {
-            val rule = RuleItem("")
-            ruleList.add(rule)
+            val index = runBlocking { ruleDao.size() }
+            val rule = Rule(
+                id = index,
+                rule = ""
+            )
+            runBlocking { ruleDao.add(rule) }
+            navHelper.rule(index)
         },
     ) {
         Icon(
